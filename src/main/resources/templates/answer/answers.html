@@ -106,10 +106,6 @@
         opacity: 0.75;
     }
 
-    .answer-delete-form {
-        margin: 0;
-    }
-
     .answer-delete-btn {
         height: 24px;
         padding: 0 10px;
@@ -130,35 +126,107 @@
 </style>
 
 {{#question}}
-<div class="answers-section">
-    <div class="answers-header">댓글 <strong>{{answersCount}}</strong></div>
+<div class="answers-section" data-question-id="{{id}}">
+{{/question}}
+    <div class="answers-header">댓글 <strong id="answer-count">0</strong></div>
 
     <div class="card">
-        {{#answers}}
-            <div class="answer-item">
-                <div class="answer-meta">
-                    <span class="answer-author">{{author}}</span>
-                    {{#isOwner}}
-                        <form class="answer-delete-form" action="/questions/{{questionId}}/answers/{{id}}" method="post">
-                            <input type="hidden" name="_method" value="DELETE">
-                            <button type="submit" class="answer-delete-btn">삭제</button>
-                        </form>
-                    {{/isOwner}}
-                </div>
-                <p class="answer-content">{{content}}</p>
-            </div>
-        {{/answers}}
-
-        {{^answers}}
+        <div id="answer-list">
             <div class="answers-empty">아직 댓글이 없습니다</div>
-        {{/answers}}
+        </div>
     </div>
 
-        <form method="post" action="/questions/{{id}}/answers" class="card answer-form">
-            <textarea class="answer-textarea" name="content" placeholder="댓글을 입력하세요" rows="3"></textarea>
-            <div class="answer-form-footer">
-                <button type="submit" class="answer-submit-btn">등록</button>
-            </div>
-        </form>
+    <form id="answer-form" class="card answer-form">
+        <textarea class="answer-textarea" id="answer-content" name="content" placeholder="댓글을 입력하세요" rows="3"></textarea>
+        <div class="answer-form-footer">
+            <button type="submit" class="answer-submit-btn">등록</button>
+        </div>
+    </form>
+
+{{#question}}
 </div>
 {{/question}}
+
+<script>
+    (function () {
+        const questionId = document.querySelector('[data-question-id]').dataset.questionId;
+        const answerList = document.getElementById('answer-list');
+        const answerCount = document.getElementById('answer-count');
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function renderAnswers(answers) {
+            answerCount.textContent = answers.length;
+
+            if (answers.length === 0) {
+                answerList.innerHTML = '<div class="answers-empty">아직 댓글이 없습니다</div>';
+                return;
+            }
+
+            answerList.innerHTML = answers.map(function (a) {
+                const deleteBtn = a.isOwner
+                    ? `<button class="answer-delete-btn" data-id="${a.id}">삭제</button>`
+                    : '';
+                return `
+                    <div class="answer-item" data-id="${a.id}">
+                        <div class="answer-meta">
+                            <span class="answer-author">${escapeHtml(a.author)}</span>
+                            ${deleteBtn}
+                        </div>
+                        <p class="answer-content">${escapeHtml(a.content)}</p>
+                    </div>`;
+            }).join('');
+
+            answerList.querySelectorAll('.answer-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    deleteAnswer(btn.dataset.id);
+                });
+            });
+        }
+
+        function loadAnswers() {
+            fetch('/api/questions/' + questionId + '/answers')
+                .then(function (res) { return res.json(); })
+                .then(renderAnswers)
+                .catch(function (err) { console.error('댓글 로드 실패', err); });
+        }
+
+        function deleteAnswer(answerId) {
+            fetch('/api/questions/' + questionId + '/answers/' + answerId, {
+                method: 'DELETE'
+            }).then(function (res) {
+                if (res.ok) {
+                    loadAnswers();
+                }
+            }).catch(function (err) { console.error('댓글 삭제 실패', err); });
+        }
+
+        document.getElementById('answer-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const textarea = document.getElementById('answer-content');
+            const content = textarea.value.trim();
+            if (!content) return;
+
+            const formData = new FormData();
+            formData.append('content', content);
+
+            fetch('/api/questions/' + questionId + '/answers', {
+                method: 'POST',
+                body: formData
+            }).then(function (res) {
+                if (res.ok) {
+                    textarea.value = '';
+                    loadAnswers();
+                }
+            }).catch(function (err) { console.error('댓글 등록 실패', err); });
+        });
+
+        loadAnswers();
+    })();
+</script>

@@ -1,10 +1,13 @@
 package com.codesquad.cafe.answer;
 
+import com.codesquad.cafe.answer.dto.AnswerDetail;
 import com.codesquad.cafe.global.exception.NotOwnerException;
+import com.codesquad.cafe.question.Question;
 import com.codesquad.cafe.question.QuestionRepository;
 import com.codesquad.cafe.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,10 +25,11 @@ public class AnswerService {
     }
 
     @Transactional
-    public void save(Answer answer, Long authorId, Long questionId) {
+    public AnswerDetail save(Answer answer, Long authorId, Long questionId) {
         answer.setAuthor(userRepository.findById(authorId).get());
         answer.setQuestion(questionRepository.findById(questionId).get());
-        answerRepository.save(answer);
+        Answer save = answerRepository.save(answer);
+        return AnswerDetail.from(save,authorId);
     }
 
     @Transactional
@@ -38,5 +42,14 @@ public class AnswerService {
         }
 
         answerRepository.delete(answer);
+    }
+
+    public List<AnswerDetail> getAnswers(Long questionId, Long loginUserId) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new EntityNotFoundException("게시글이 존재하지 않음"));
+
+        return question.getAnswers().stream()
+                .map((Answer answer) -> AnswerDetail.from(answer, loginUserId))
+                .toList();
     }
 }
